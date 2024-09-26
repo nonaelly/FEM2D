@@ -48,45 +48,81 @@ if ndim == 2
     [GK_u,GK_v,GK1_a,GK2_a,GK3_a,B,D] = globalKVis2D(EX,mu,h,elem,node,isStress,reduce,mnode);
 end
 
+% ----------------------------第一类边界条件-----------------------------------
+fprintf(1,'boundary condition\n')
+
+% 对角元改1法施加第一类边界条件
+[GK,force] = boundary_chang_one(GK_u,GK_v,GK_a,fixNode,nodeForce,sumNode,ndim);
+
+% ----------------------------求解方程--------------------------------------
+fprintf(1,'solve the equation\n')
+u = GK\force;
+% 将计算所得结果改成非稀疏形式
+[nodeNdfID,~,rst] = find(u);
+u = zeros(ndim*sumNode,1);
+u(nodeNdfID) = rst;
+u = reshape(u,ndim,[]);
+if mnode == 4 && reduce == 0
+    [s,mises] = getStress(B,D,u,elem,ndim,sumNode,sumElem,mnode);
+elseif mnode == 8 && reduce == 1
+    [s,mises] = getStress(B,D,u,elem,ndim,sumNode,sumElem,mnode);
+else
+    fprintf(1,'不计算应力\n')
+end
+u = u';
+
+% 显示结果
+% ux
+figure
+axis equal;
+showContour(node,elem,u(:,1));
+axis off;
+% uy
+figure
+axis equal;
+showContour(node,elem,u(:,2));
+axis off;
+% von-Mises stress
+figure
+axis equal;
+showContour(node,elem,mises);
+axis off;
+disp('solution is done')
+
 %% Solve viscoelastic process
 
 t0=0;   % start time
 tEnd=300;  % total time
 dt=0.1; % time step
 
-tauG = 1/2.3979;  % relaxation times
-tauK = 1/2.3979;  % relaxation times
-visG = 0.99; % nomalized shear modulus
+tauG = 2.5;  % relaxation times
+tauK = 2.5;  % relaxation times
+visG = 0.25; % nomalized shear modulus
 visK = 0;    % nomalized volume modulus
 
 K0 = EX(1)./(3*(1-2*mu(1)));
 G0 = EX(1)./(2*(1+mu(1)));
 
-[qG_jk, qG_jk1] = deal(zeros(length(u), length(visG)));
-[qK_jk, qK_jk1] = deal(zeros(length(u), length(visK)));
-
 t = 0;
 while t < tEnd
-    G_dt = G0*(1 - visG.*(1-exp(-dt./tauG))) ;
-    K_dt = K0*(1 - visK.*(1-exp(-dt./tauK)));
+
+    G_dt = visG.*exp(-dt./tauG);
+    K_dt = visK.*exp(-dt./tauK);
+
+    uStar_k2 = (uk2 + uk1)/2;
+    qG_k = exp(-dt./tauG).*((1-exp(-dt./tauG)).*uStar_k2+qk_1G);
 
     GK_a = GK1_a + G0*(1 - G_dt)*GK2_a + K0*(1 - K_dt)*GK3_a;
     [GK, feM] = boundary_chang_one(GK_u,GK_v,GK_a,fixNode,nodeForce,sumNode,ndim);
-    feM1 = - 2*GK2_a*(G0*sum(visG.*qG_jk, 2) + 1/2*G0*(1 - G_dt)*uk1);
-    feM2 = - 2*GK3_a*(K0*sum(visK.*qK_jk, 2) + 1/2*K0*(1 - K_dt)*uk1);
+
+    
+    feM1 = - 2*GK2_a*(*uStar + 1/2*G0*(1 - G_dt)*uk2);
     %     force = feT + feM + feM1 + feM2 + feM3;
     force = feM + feM1 + feM2;
-
     u = GK\force;
 
     uk2 = uk1;
     uk1 = u;
-    uStar_k2 = (uk2 + uk1)/2;
-
-    qG_jk1 = qG_jk;
-    qK_jk1 = qK_jk;
-    qG_jk = exp(-dt./tauG).*((1-exp(-dt./tauG)).*uStar_k2+qG_jk1);
-    qK_jk = exp(-dt./tauK).*((1-exp(-dt./tauK)).*uStar_k2+qK_jk1);
 
     t = t + dt;
 end

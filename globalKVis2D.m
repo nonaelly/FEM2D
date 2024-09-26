@@ -1,4 +1,4 @@
-function [u,v,a1,B,D] = globalKVis2D(elemEX,elemMu,h,elem,node,isStress,reduce,mnode)
+function [u,v,a1,a2,a3,B,D] = globalKVis2D(elemEX,elemMu,h,elem,node,isStress,reduce,mnode)
 % Stiffness matrix for viscoelastic problem
 % K1 : elastic
 
@@ -29,7 +29,9 @@ a1 = zeros(sumElem*(mnode*2)*(mnode*2),1);
 a2 = zeros(sumElem*(mnode*2)*(mnode*2),1);
 a3 = zeros(sumElem*(mnode*2)*(mnode*2),1);
 
-[D1, D2, D3] = PlaneData(K0, G0, ndim);
+ndim = 2;
+K0 = elemEX./(3*(1-2*elemMu));
+G0 = elemEX./(2*(1+elemMu));
 
 % GK = zeros(sumNode*2);
 if mnode == 4
@@ -44,14 +46,15 @@ if mnode == 4
         y3 = node(elem(n,3),2);
         x4 = node(elem(n,4),1);
         y4 = node(elem(n,4),2);
-        % elastic
+        [~, D2, D3] = PlaneData(ndim, G0(n), K0(n));
+        % elastic       
         [K1,elemB1,elemD1] = elemK2D4(EX,mu,h,x1,y1,x2,y2,x3,y3,x4,y4,isStress,reduce);  % 生成单元刚度阵
         % visco : G 
         % K2 = 1/2*B'*D2*B
-        K2 = elemK2D4Vis(EX,mu,h,x1,y1,x2,y2,x3,y3,x4,y4,isStress,reduce,D2/2);  % 生成单元刚度阵
+        K2 = elemK2D4Vis(h,x1,y1,x2,y2,x3,y3,x4,y4,reduce,D2/2);  % 生成单元刚度阵
         % visco : K 
         % K3 = B'*D3*B
-        K3 = elemK2D4Vis(EX,mu,h,x1,y1,x2,y2,x3,y3,x4,y4,isStress,reduce,D3);  % 生成单元刚度阵
+        K3 = elemK2D4Vis(h,x1,y1,x2,y2,x3,y3,x4,y4,reduce,D3);  % 生成单元刚度阵
         if reduce == 0
             B(12*n-11:12*n,:) = elemB1;
             D(3*n-2:3*n,:) = elemD1;
